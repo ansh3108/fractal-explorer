@@ -43,3 +43,4 @@ export function HUD({ uiState, autoZoom, setAutoZoom }: HUDProps) {
     </div>
   );
 }
+
