@@ -5,7 +5,14 @@ interface FractalState {
   zoom: number;
   x: number;
   y: number;
+  maxIter: number;
 }
+
+const splitDouble = (val: number) => {
+  const high = Math.fround(val);
+  const low = val - high;
+  return [high, low];
+};
 
 export function useFractalEngine(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
@@ -13,12 +20,12 @@ export function useFractalEngine(
   onUiUpdate: (state: FractalState) => void
 ) {
   const engine = useRef({
-    x: -0.5,
-    y: 0.0,
-    targetX: -0.5,
-    targetY: 0.0,
-    zoom: 0.8,
-    targetZoom: 0.8,
+    x: -0.7900332,
+    y: 0.1372227,
+    targetX: -0.7900332,
+    targetY: 0.1372227,
+    zoom: 189000,
+    targetZoom: 189000,
     isDragging: false,
     lastMouseX: 0,
     lastMouseY: 0,
@@ -38,6 +45,7 @@ export function useFractalEngine(
       gl.shaderSource(shader, source);
       gl.compileShader(shader);
       if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error(gl.getShaderInfoLog(shader));
         gl.deleteShader(shader);
         return null;
       }
@@ -63,9 +71,11 @@ export function useFractalEngine(
     gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
     const resLoc = gl.getUniformLocation(program, 'u_resolution');
-    const offsetLoc = gl.getUniformLocation(program, 'u_offset');
-    const zoomLoc = gl.getUniformLocation(program, 'u_zoom');
+    const offsetXLoc = gl.getUniformLocation(program, 'u_offset_x');
+    const offsetYLoc = gl.getUniformLocation(program, 'u_offset_y');
+    const pixelStepLoc = gl.getUniformLocation(program, 'u_pixel_step');
     const timeLoc = gl.getUniformLocation(program, 'u_time');
+    const maxIterLoc = gl.getUniformLocation(program, 'u_max_iter');
 
     let animationFrameId: number;
     let startTime = performance.now();
@@ -87,23 +97,43 @@ export function useFractalEngine(
         engine.current.targetZoom *= 1.005;
       }
 
+      if (Number.isNaN(engine.current.targetZoom) || engine.current.targetZoom <= 0) {
+        engine.current.targetZoom = 0.8;
+      }
+
       engine.current.zoom += (engine.current.targetZoom - engine.current.zoom) * 0.1;
       engine.current.x += (engine.current.targetX - engine.current.x) * 0.1;
       engine.current.y += (engine.current.targetY - engine.current.y) * 0.1;
+
+      const safeZoom = Math.max(0.1, engine.current.zoom);
+      let dynamicMaxIter = Math.floor(400.0 + Math.max(0, Math.log10(safeZoom)) * 150.0);
+      
+      if (Number.isNaN(dynamicMaxIter) || dynamicMaxIter < 100) {
+          dynamicMaxIter = 400;
+      }
 
       if (time - lastUiUpdate > 100) {
         onUiUpdate({
           zoom: engine.current.zoom,
           x: engine.current.x,
-          y: engine.current.y
+          y: engine.current.y,
+          maxIter: dynamicMaxIter
         });
         lastUiUpdate = time;
       }
 
+      const [oxHi, oxLo] = splitDouble(engine.current.x);
+      const [oyHi, oyLo] = splitDouble(engine.current.y);
+      
+      const pixelStep = 1.0 / (safeZoom * h);
+      const [stepHi, stepLo] = splitDouble(pixelStep);
+
       gl.uniform2f(resLoc, w, h);
-      gl.uniform2f(offsetLoc, engine.current.x, engine.current.y);
-      gl.uniform1f(zoomLoc, engine.current.zoom);
+      gl.uniform2f(offsetXLoc, oxHi, oxLo);
+      gl.uniform2f(offsetYLoc, oyHi, oyLo);
+      gl.uniform2f(pixelStepLoc, stepHi, stepLo);
       gl.uniform1f(timeLoc, (time - startTime) / 1000.0);
+      gl.uniform1f(maxIterLoc, dynamicMaxIter);
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       animationFrameId = requestAnimationFrame(render);
@@ -120,7 +150,7 @@ export function useFractalEngine(
       const uvY = -(e.clientY - s.height / 2) / s.height;
 
       const zoomFactor = e.deltaY > 0 ? 0.85 : 1.15;
-      const newTargetZoom = s.targetZoom * zoomFactor;
+      const newTargetZoom = Math.max(0.1, s.targetZoom * zoomFactor);
 
       s.targetX = s.targetX + uvX * (1 / s.targetZoom - 1 / newTargetZoom);
       s.targetY = s.targetY + uvY * (1 / s.targetZoom - 1 / newTargetZoom);
@@ -137,7 +167,9 @@ export function useFractalEngine(
 
       const dx = e.clientX - s.lastMouseX;
       const dy = e.clientY - s.lastMouseY;
-      const panSpeed = 1.0 / (s.zoom * s.height);
+      
+      const safeZoom = Math.max(0.1, s.zoom);
+      const panSpeed = 1.0 / (safeZoom * s.height);
 
       s.targetX -= dx * panSpeed;
       s.targetY += dy * panSpeed;
@@ -152,6 +184,3 @@ export function useFractalEngine(
 
   return handlers;
 }
-
-
-

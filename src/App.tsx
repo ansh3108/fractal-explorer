@@ -1,14 +1,18 @@
-import React, { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { useFractalEngine } from './hooks/useFractalEngine';
+import type { FractalState } from './hooks/useFractalEngine';
 import { HUD } from './components/HUD';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  const [uiState, setUiState] = useState({ zoom: 0.8, x: -0.5, y: 0.0 });
+
+  const [uiState, setUiState] = useState<FractalState>({
+    zoom: 99400, x: -0.758869, y: 0.024215,
+    mode: 'classic', refOrbitLen: 0, maxIter: 400,
+  });
   const [autoZoom, setAutoZoom] = useState(false);
 
-  const handleUiUpdate = useCallback((state: { zoom: number; x: number; y: number }) => {
+  const handleUiUpdate = useCallback((state: FractalState) => {
     setUiState(state);
   }, []);
 
@@ -25,13 +29,7 @@ export default function App() {
         onPointerUp={handlers.onPointerUp}
         onPointerLeave={handlers.onPointerUp}
       />
-      
-      <HUD 
-        uiState={uiState} 
-        autoZoom={autoZoom} 
-        setAutoZoom={setAutoZoom} 
-      />
+      <HUD uiState={uiState} autoZoom={autoZoom} setAutoZoom={setAutoZoom} />
     </div>
   );
 }
-
